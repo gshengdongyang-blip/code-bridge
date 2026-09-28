@@ -1,0 +1,3 @@
+([('CodeBridge',
+   '/Users/haojie/Documents/workspece/saomapingtai/code_bridge/dist/CodeBridge',
+   'EXECUTABLE')],)
