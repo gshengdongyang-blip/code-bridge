@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# macOS
+.DS_Store
+
+# Config (contains runtime settings)
+config.json
+
+# DMG/ZIP (release artifacts)
+*.dmg
+*.zip
