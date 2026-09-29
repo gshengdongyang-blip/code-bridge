@@ -10,6 +10,7 @@ import sys
 import json
 import time
 import socket
+import subprocess
 import threading
 import queue
 import base64
@@ -19,6 +20,52 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 import requests
+
+# ═══════════════════════════════════════════════════════════════════
+#  蓝色科技风主题色板 (全部 #RRGGBB, 无透明度)
+# ═══════════════════════════════════════════════════════════════════
+
+THEME = {
+    "bg":            "#eef4fb",   # 浅蓝灰 主背景
+    "card_bg":       "#ffffff",   # 白色 卡片背景
+    "card_hover":    "#e3f0fc",   # 卡片悬停 浅蓝
+    "border":        "#bbdefb",   # 浅蓝边框
+    "accent":        "#2196f3",   # 主蓝
+    "accent_hover":  "#42a5f5",   # 主蓝悬停
+    "accent_dark":   "#1976d2",   # 主蓝按下
+    "success":       "#00c853",   # 成功绿
+    "danger":        "#ff1744",   # 失败红
+    "warning":       "#ff9100",   # 警告橙
+    "text":          "#1a2a3a",   # 主文字 深蓝灰
+    "text_secondary":"#546e7a",   # 次要文字
+    "text_muted":    "#90a4ae",   # 暗文字
+    "input_bg":      "#ffffff",   # 输入框背景
+    "input_fg":      "#1a2a3a",   # 输入框文字
+}
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  语音播报 (跨平台)
+# ═══════════════════════════════════════════════════════════════════
+
+def speak(text: str):
+    """非阻塞语音播报"""
+    def _speak():
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["say", "-v", "Tingting", text],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif sys.platform.startswith("win"):
+                # Windows SAPI
+                subprocess.run(
+                    ["powershell", "-Command",
+                     f"Add-Type -AssemblyName System.Speech; "
+                     f"(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{text}')"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    creationflags=0x08000000)  # CREATE_NO_WINDOW
+        except Exception:
+            pass
+    threading.Thread(target=_speak, daemon=True).start()
 
 # ═══════════════════════════════════════════════════════════════════
 #  默认配置
@@ -50,6 +97,9 @@ DEFAULT_CONFIG = {
         "auto_sign": True,
         "auto_weighing": True,
         "upload_image": False
+    },
+    "notify": {
+        "voice_enabled": True
     }
 }
 
@@ -323,20 +373,78 @@ class BridgeApp:
     # ── UI 构建 ──────────────────────────────────────────────────────
 
     def _build_ui(self):
-        self.root.title("读码平台桥接器 - 仓库对接服务")
-        self.root.geometry("860x680")
-        self.root.minsize(720, 560)
+        self.root.title("读码平台桥接器")
+        self.root.geometry("980x720")
+        self.root.minsize(820, 620)
+        self.root.configure(bg=THEME["bg"])
 
         style = ttk.Style()
-        style.configure("TLabelframe.Label", font=("Microsoft YaHei", 10, "bold"))
-        style.configure("TButton", font=("Microsoft YaHei", 10))
-        style.configure("TLabel", font=("Microsoft YaHei", 9))
-        style.configure("TEntry", font=("Consolas", 10))
-        style.configure("TCheckbutton", font=("Microsoft YaHei", 9))
+        style.theme_use("clam")
+
+        # ── 全局配色 ──
+        style.configure(".", background=THEME["bg"], foreground=THEME["text"],
+                        font=("Microsoft YaHei", 10))
+        style.configure("TFrame", background=THEME["bg"])
+        style.configure("Card.TFrame", background=THEME["card_bg"])
+
+        # ── 标题头 ──
+        header = tk.Frame(self.root, bg=THEME["card_bg"], height=56)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        tk.Label(header, text="⚡ 读码平台桥接器",
+                 font=("Microsoft YaHei", 16, "bold"),
+                 fg=THEME["accent"], bg=THEME["card_bg"]).pack(side=tk.LEFT, padx=16)
+        tk.Label(header, text="Code Platform Bridge · 仓库对接服务",
+                 font=("Microsoft YaHei", 9),
+                 fg=THEME["text_muted"], bg=THEME["card_bg"]).pack(side=tk.LEFT, padx=4)
+        self.lbl_header_status = tk.Label(header, text="● 离线", font=("Microsoft YaHei", 10),
+                                           fg=THEME["danger"], bg=THEME["card_bg"])
+        self.lbl_header_status.pack(side=tk.RIGHT, padx=16)
+
+        # ── ttk 样式 ──
+        style.configure("TLabel", background=THEME["bg"], foreground=THEME["text"],
+                        font=("Microsoft YaHei", 9))
+        style.configure("Card.TLabel", background=THEME["card_bg"], foreground=THEME["text"])
+        style.configure("Secondary.TLabel", background=THEME["bg"],
+                        foreground=THEME["text_secondary"], font=("Microsoft YaHei", 8))
+        style.configure("Muted.TLabel", background=THEME["bg"],
+                        foreground=THEME["text_muted"], font=("Microsoft YaHei", 8))
+
+        style.configure("TEntry", fieldbackground=THEME["input_bg"],
+                        foreground=THEME["input_fg"], insertcolor=THEME["text"],
+                        bordercolor=THEME["border"], lightcolor=THEME["border"],
+                        darkcolor=THEME["border"], font=("Consolas", 10), padding=4)
+        style.map("TEntry", bordercolor=[("focus", THEME["accent"])],
+                  lightcolor=[("focus", THEME["accent"])])
+
+        style.configure("TCheckbutton", background=THEME["bg"], foreground=THEME["text"],
+                        font=("Microsoft YaHei", 9))
+        style.configure("TRadiobutton", background=THEME["bg"], foreground=THEME["text"],
+                        font=("Microsoft YaHei", 9))
+
+        # 主按钮 (蓝色)
+        style.configure("Accent.TButton", background=THEME["accent"],
+                        foreground="#ffffff", font=("Microsoft YaHei", 10, "bold"),
+                        padding=(14, 6), borderwidth=0)
+        style.map("Accent.TButton",
+                  background=[("active", THEME["accent_hover"]), ("pressed", THEME["accent_dark"])])
+
+        # 次要按钮
+        style.configure("TButton", background=THEME["card_bg"], foreground=THEME["text"],
+                        font=("Microsoft YaHei", 10), padding=(12, 6), borderwidth=0)
+        style.map("TButton", background=[("active", THEME["card_hover"])])
+
+        # 标签框架
+        style.configure("TLabelframe", background=THEME["bg"], bordercolor=THEME["border"])
+        style.configure("TLabelframe.Label", background=THEME["bg"],
+                        foreground=THEME["accent"], font=("Microsoft YaHei", 11, "bold"))
 
         # ── 菜单 ──
-        menubar = tk.Menu(self.root)
-        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar = tk.Menu(self.root, bg=THEME["card_bg"], fg=THEME["text"],
+                          activebackground=THEME["accent"], activeforeground="#ffffff",
+                          borderwidth=0)
+        help_menu = tk.Menu(menubar, tearoff=0, bg=THEME["card_bg"], fg=THEME["text"],
+                            activebackground=THEME["accent"], activeforeground="#ffffff")
         help_menu.add_command(label="读码平台数据模板配置指南",
                               command=self._show_template_guide)
         help_menu.add_command(label="关于", command=self._show_about)
@@ -344,127 +452,143 @@ class BridgeApp:
         self.root.config(menu=menubar)
 
         # ── 配置区 ──
-        cfg_frame = ttk.LabelFrame(self.root, text="连接配置", padding=10)
-        cfg_frame.pack(fill=tk.X, padx=8, pady=(8, 4))
+        cfg_frame = ttk.LabelFrame(self.root, text=" 连接配置 ", padding=12)
+        cfg_frame.pack(fill=tk.X, padx=12, pady=(12, 6))
 
         # API 地址
         row = 0
         ttk.Label(cfg_frame, text="仓库 API 地址:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
-        self.ent_api_url = ttk.Entry(cfg_frame, width=48)
-        self.ent_api_url.grid(row=row, column=1, columnspan=5, sticky=tk.EW, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
+        self.ent_api_url = ttk.Entry(cfg_frame, width=52)
+        self.ent_api_url.grid(row=row, column=1, columnspan=5, sticky=tk.EW, padx=4, pady=6)
 
         # TCP 模式
         row += 1
         ttk.Label(cfg_frame, text="TCP 模式:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
         self.var_tcp_mode = tk.StringVar(value="server")
         ttk.Radiobutton(cfg_frame, text="服务端 (平台连我)",
                         variable=self.var_tcp_mode, value="server").grid(
-            row=row, column=1, sticky=tk.W, padx=2)
+            row=row, column=1, sticky=tk.W, padx=4)
         ttk.Radiobutton(cfg_frame, text="客户端 (我连平台)",
                         variable=self.var_tcp_mode, value="client").grid(
-            row=row, column=2, sticky=tk.W, padx=2)
+            row=row, column=2, sticky=tk.W, padx=4)
 
         # 端口 / 平台地址
         row += 1
         ttk.Label(cfg_frame, text="监听端口:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
         self.ent_listen_port = ttk.Entry(cfg_frame, width=10)
-        self.ent_listen_port.grid(row=row, column=1, sticky=tk.W, padx=2, pady=3)
+        self.ent_listen_port.grid(row=row, column=1, sticky=tk.W, padx=4, pady=6)
 
         ttk.Label(cfg_frame, text="平台地址:").grid(
-            row=row, column=2, sticky=tk.W, padx=2, pady=3)
-        self.ent_platform_addr = ttk.Entry(cfg_frame, width=22)
-        self.ent_platform_addr.grid(row=row, column=3, columnspan=2, sticky=tk.W, padx=2, pady=3)
+            row=row, column=2, sticky=tk.W, padx=4, pady=6)
+        self.ent_platform_addr = ttk.Entry(cfg_frame, width=24)
+        self.ent_platform_addr.grid(row=row, column=3, columnspan=2, sticky=tk.W, padx=4, pady=6)
 
         # 数据格式
         row += 1
         ttk.Label(cfg_frame, text="数据分隔符:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
         self.ent_delimiter = ttk.Entry(cfg_frame, width=6)
-        self.ent_delimiter.grid(row=row, column=1, sticky=tk.W, padx=2, pady=3)
+        self.ent_delimiter.grid(row=row, column=1, sticky=tk.W, padx=4, pady=6)
 
         ttk.Label(cfg_frame, text="字段顺序:").grid(
-            row=row, column=2, sticky=tk.W, padx=2, pady=3)
-        self.ent_fields = ttk.Entry(cfg_frame, width=28)
-        self.ent_fields.grid(row=row, column=3, columnspan=2, sticky=tk.EW, padx=2, pady=3)
+            row=row, column=2, sticky=tk.W, padx=4, pady=6)
+        self.ent_fields = ttk.Entry(cfg_frame, width=30)
+        self.ent_fields.grid(row=row, column=3, columnspan=2, sticky=tk.EW, padx=4, pady=6)
 
         # 单位转换
         row += 1
         ttk.Label(cfg_frame, text="重量倍率:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
         self.ent_weight_mult = ttk.Entry(cfg_frame, width=8)
-        self.ent_weight_mult.grid(row=row, column=1, sticky=tk.W, padx=2, pady=3)
-        ttk.Label(cfg_frame, text="(kg→g=1000)").grid(
-            row=row, column=2, sticky=tk.W, padx=2, pady=3)
+        self.ent_weight_mult.grid(row=row, column=1, sticky=tk.W, padx=4, pady=6)
+        ttk.Label(cfg_frame, text="(kg→g=1000)", style="Muted.TLabel").grid(
+            row=row, column=2, sticky=tk.W, padx=4, pady=6)
 
         ttk.Label(cfg_frame, text="尺寸倍率:").grid(
-            row=row, column=3, sticky=tk.W, padx=2, pady=3)
+            row=row, column=3, sticky=tk.W, padx=4, pady=6)
         self.ent_dim_mult = ttk.Entry(cfg_frame, width=8)
-        self.ent_dim_mult.grid(row=row, column=4, sticky=tk.W, padx=2, pady=3)
+        self.ent_dim_mult.grid(row=row, column=4, sticky=tk.W, padx=4, pady=6)
 
         # 工作流
         row += 1
         ttk.Label(cfg_frame, text="工作流:").grid(
-            row=row, column=0, sticky=tk.W, padx=2, pady=3)
+            row=row, column=0, sticky=tk.W, padx=4, pady=6)
         self.var_auto_sign = tk.BooleanVar(value=True)
         self.var_auto_weighing = tk.BooleanVar(value=True)
         self.var_upload_img = tk.BooleanVar(value=False)
+        self.var_voice = tk.BooleanVar(value=True)
         ttk.Checkbutton(cfg_frame, text="自动签收",
                         variable=self.var_auto_sign).grid(
-            row=row, column=1, sticky=tk.W, padx=2)
+            row=row, column=1, sticky=tk.W, padx=4)
         ttk.Checkbutton(cfg_frame, text="自动出库",
                         variable=self.var_auto_weighing).grid(
-            row=row, column=2, sticky=tk.W, padx=2)
+            row=row, column=2, sticky=tk.W, padx=4)
         ttk.Checkbutton(cfg_frame, text="上传图片",
                         variable=self.var_upload_img).grid(
-            row=row, column=3, sticky=tk.W, padx=2)
+            row=row, column=3, sticky=tk.W, padx=4)
+        ttk.Checkbutton(cfg_frame, text="🔊 语音提醒",
+                        variable=self.var_voice).grid(
+            row=row, column=4, sticky=tk.W, padx=4)
 
         cfg_frame.columnconfigure(1, weight=1)
 
         # ── 日志区 ──
-        log_frame = ttk.LabelFrame(self.root, text="实时日志", padding=4)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+        log_frame = ttk.LabelFrame(self.root, text=" 实时日志 ", padding=6)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
 
         self.log_text = scrolledtext.ScrolledText(
-            log_frame, wrap=tk.WORD, font=("Consolas", 9), height=18,
-            bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
+            log_frame, wrap=tk.WORD, font=("Consolas", 10), height=18,
+            bg="#f8fbff", fg="#263238", insertbackground=THEME["text"],
+            selectbackground=THEME["accent"], selectforeground="#ffffff",
+            borderwidth=0, relief=tk.FLAT, padx=8, pady=6)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         # 日志颜色标签
-        self.log_text.tag_config("INFO", foreground="#4ec9b0")
-        self.log_text.tag_config("ERROR", foreground="#f44747")
-        self.log_text.tag_config("WARN", foreground="#dcdcaa")
+        self.log_text.tag_config("INFO", foreground=THEME["success"])
+        self.log_text.tag_config("ERROR", foreground=THEME["danger"])
+        self.log_text.tag_config("WARN", foreground=THEME["warning"])
 
         # ── 底栏 ──
-        bottom = ttk.Frame(self.root, padding=(8, 4))
-        bottom.pack(fill=tk.X, side=tk.BOTTOM)
+        bottom = tk.Frame(self.root, bg=THEME["bg"])
+        bottom.pack(fill=tk.X, side=tk.BOTTOM, padx=12, pady=(6, 12))
 
-        stats_frame = ttk.Frame(bottom)
-        stats_frame.pack(side=tk.LEFT)
-        ttk.Label(stats_frame, text="收到:").grid(row=0, column=0, padx=2)
-        self.lbl_received = ttk.Label(stats_frame, text="0", font=("Consolas", 12, "bold"))
-        self.lbl_received.grid(row=0, column=1, padx=2)
-        ttk.Label(stats_frame, text="成功:").grid(row=0, column=2, padx=2)
-        self.lbl_success = ttk.Label(stats_frame, text="0", font=("Consolas", 12, "bold"),
-                                     foreground="green")
-        self.lbl_success.grid(row=0, column=3, padx=2)
-        ttk.Label(stats_frame, text="失败:").grid(row=0, column=4, padx=2)
-        self.lbl_fail = ttk.Label(stats_frame, text="0", font=("Consolas", 12, "bold"),
-                                  foreground="red")
-        self.lbl_fail.grid(row=0, column=5, padx=2)
-
-        right_frame = ttk.Frame(bottom)
+        # 按钮先 pack(RIGHT) 确保始终可见
+        right_frame = tk.Frame(bottom, bg=THEME["bg"])
         right_frame.pack(side=tk.RIGHT)
-        ttk.Button(right_frame, text="保存配置", command=self._save_and_apply).pack(
-            side=tk.LEFT, padx=4)
-        self.btn_start = ttk.Button(right_frame, text="启动服务",
+        self.btn_save = ttk.Button(right_frame, text="保存配置",
+                                   command=self._save_and_apply)
+        self.btn_save.pack(side=tk.LEFT, padx=4)
+        self.btn_start = ttk.Button(right_frame, text="▶ 启动服务",
+                                    style="Accent.TButton",
                                     command=self._toggle_service)
         self.btn_start.pack(side=tk.LEFT, padx=4)
-        self.lbl_status = ttk.Label(right_frame, text="已停止",
-                                    font=("Microsoft YaHei", 10, "bold"),
-                                    foreground="red")
-        self.lbl_status.pack(side=tk.LEFT, padx=8)
+
+        # 统计卡片 (pack LEFT 在按钮之后, 避免挤压按钮)
+        def make_stat(parent, label, color):
+            card = tk.Frame(parent, bg=THEME["card_bg"], bd=0,
+                            highlightbackground=THEME["border"], highlightthickness=1)
+            tk.Label(card, text=label, bg=THEME["card_bg"], fg=THEME["text_muted"],
+                     font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=8, pady=8)
+            lbl = tk.Label(card, text="0", bg=THEME["card_bg"], fg=color,
+                           font=("Consolas", 16, "bold"))
+            lbl.pack(side=tk.LEFT, padx=(2, 10))
+            return lbl
+
+        self.lbl_received = make_stat(bottom, "收到", THEME["text"])
+        self.lbl_received.master.pack(side=tk.LEFT, padx=4)
+        self.lbl_success = make_stat(bottom, "成功", THEME["success"])
+        self.lbl_success.master.pack(side=tk.LEFT, padx=4)
+        self.lbl_fail = make_stat(bottom, "失败", THEME["danger"])
+        self.lbl_fail.master.pack(side=tk.LEFT, padx=4)
+
+    # ── 语音辅助 ─────────────────────────────────────────────────────
+
+    def _speak(self, text: str):
+        """仅在语音开启时播报"""
+        if self.var_voice.get():
+            speak(text)
 
     # ── 配置读写 ─────────────────────────────────────────────────────
 
@@ -481,6 +605,7 @@ class BridgeApp:
         self.var_auto_sign.set(self.cfg["workflow"].get("auto_sign", True))
         self.var_auto_weighing.set(self.cfg["workflow"].get("auto_weighing", True))
         self.var_upload_img.set(self.cfg["workflow"].get("upload_image", False))
+        self.var_voice.set(self.cfg.get("notify", {}).get("voice_enabled", True))
 
     def _save_config_from_ui(self):
         self.cfg["api"]["base_url"] = self.ent_api_url.get().strip()
@@ -509,6 +634,7 @@ class BridgeApp:
         self.cfg["workflow"]["auto_sign"] = self.var_auto_sign.get()
         self.cfg["workflow"]["auto_weighing"] = self.var_auto_weighing.get()
         self.cfg["workflow"]["upload_image"] = self.var_upload_img.get()
+        self.cfg.setdefault("notify", {})["voice_enabled"] = self.var_voice.get()
 
     def _save_and_apply(self):
         self._save_config_from_ui()
@@ -610,7 +736,9 @@ class BridgeApp:
                 ptype = data.get("packageTypeName", "")
                 self._log("INFO", f"签收成功: {ptype}")
             else:
-                self._log("ERROR", f"签收失败: {resp.get('msg', '未知错误')}")
+                err_msg = resp.get('msg', '未知错误')
+                self._log("ERROR", f"签收失败: {err_msg}")
+                self._speak("签收失败")
                 self.stats["fail"] += 1
                 self._update_stats()
                 return
@@ -628,9 +756,12 @@ class BridgeApp:
                               f"{data.get('logisticsTransmodeName', '')}")
                 else:
                     self._log("INFO", "出库成功")
+                self._speak("出库成功")
                 self.stats["success"] += 1
             else:
-                self._log("ERROR", f"出库失败: {resp.get('msg', '未知错误')}")
+                err_msg = resp.get('msg', '未知错误')
+                self._log("ERROR", f"出库失败: {err_msg}")
+                self._speak("出库失败")
                 self.stats["fail"] += 1
 
         self._update_stats()
@@ -657,9 +788,9 @@ class BridgeApp:
         self.tcp_bridge.start()
 
         self.running = True
-        self.btn_start.config(text="停止服务")
-        self.lbl_status.config(text="运行中", foreground="green")
-        self._log("INFO", "=" * 60)
+        self.btn_start.config(text="■ 停止服务")
+        self.lbl_header_status.config(text="● 在线", fg=THEME["success"])
+        self._log("INFO", "─" * 56)
         self._log("INFO", "服务已启动")
         self._log("INFO", f"API 地址: {self.cfg['api']['base_url']}")
         mode = self.cfg["tcp"]["mode"]
@@ -670,16 +801,19 @@ class BridgeApp:
                       f"TCP 模式: 客户端, 目标 "
                       f"{self.cfg['tcp']['platform_host']}:{self.cfg['tcp']['platform_port']}")
         self._log("INFO", f"自动签收: {self.cfg['workflow']['auto_sign']}  "
-                          f"自动出库: {self.cfg['workflow']['auto_weighing']}")
-        self._log("INFO", "=" * 60)
+                          f"自动出库: {self.cfg['workflow']['auto_weighing']}  "
+                          f"语音: {self.cfg['notify']['voice_enabled']}")
+        self._log("INFO", "─" * 56)
+        self._speak("服务已启动")
 
     def _stop_service(self):
         if self.tcp_bridge:
             self.tcp_bridge.stop()
         self.running = False
-        self.btn_start.config(text="启动服务")
-        self.lbl_status.config(text="已停止", foreground="red")
+        self.btn_start.config(text="▶ 启动服务")
+        self.lbl_header_status.config(text="● 离线", fg=THEME["danger"])
         self._log("WARN", "服务已停止")
+        self._speak("服务已停止")
 
     # ── 帮助 ─────────────────────────────────────────────────────────
 
